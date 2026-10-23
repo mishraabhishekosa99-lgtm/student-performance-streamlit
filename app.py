@@ -31,7 +31,8 @@ def prepare_display_frame(scored: pd.DataFrame, school_days: int) -> pd.DataFram
         lambda value: "Strong" if value >= 90 else ("Watch" if value >= 75 else "Low")
     )
     frame["mark_percent"] = frame["G3"] * 5
-    frame["confidence_percent"] = frame["model_confidence"] * 100
+    if "model_confidence" in frame.columns:
+        frame["confidence_percent"] = frame["model_confidence"] * 100
     return frame
 
 
@@ -55,7 +56,17 @@ def apply_filters(
     return filtered
 
 
-def show_record_table(records: pd.DataFrame) -> None:
+def model_analysis_or_stop(records: pd.DataFrame) -> dict:
+    try:
+        return analyze_records(records)
+    except ValueError as exc:
+        st.error(f"The model could not train on this dataset: {exc}")
+        st.info("Upload a labeled CSV containing at least three passing and three failing records, or remove the upload to use the included UCI data.")
+        st.stop()
+        return {}
+
+
+def show_record_table(records: pd.DataFrame, include_model: bool = True) -> None:
     columns = {
         "record_id": "Student record",
         "course": "Course / subject",
@@ -68,9 +79,10 @@ def show_record_table(records: pd.DataFrame) -> None:
         "absences": "Absences",
         "attendance_estimate": "Est. attendance %",
         "actual_outcome": "Recorded result",
-        "model_prediction": "ML prediction",
-        "confidence_percent": "Model confidence %",
     }
+    if include_model:
+        columns["model_prediction"] = "ML prediction"
+        columns["confidence_percent"] = "Model confidence %"
     view = records[list(columns)].rename(columns=columns)
     st.dataframe(
         view,
@@ -120,14 +132,7 @@ else:
     source_records = get_uci_records()
     source_label = "UCI Student Performance dataset"
 
-try:
-    analysis = analyze_records(source_records)
-except ValueError as exc:
-    st.error(f"The model could not train on this dataset: {exc}")
-    st.info("Upload a labeled CSV containing at least three passing and three failing records, or remove the upload to use the included UCI data.")
-    st.stop()
-
-records = prepare_display_frame(analysis["records"], int(school_days))
+records = prepare_display_frame(source_records, int(school_days))
 
 with st.sidebar:
     st.caption(f"Active data: {source_label}")
@@ -167,6 +172,7 @@ if page == "Overview":
             f"Attendance is an estimate using {int(school_days)} assumed school days: "
             "(school days − recorded absences) ÷ school days. Change the assumption in the sidebar."
         )
+        st.caption("Model fitting is deferred until you open Student records or Model lab so this overview can load first.")
 
         chart_left, chart_right = st.columns([1.35, 1])
         with chart_left:
@@ -204,7 +210,7 @@ if page == "Overview":
         st.caption("Grades are from the UCI dataset's original 0–20 scale; 10/20 is the pass threshold used here.")
 
         st.subheader("Records matching your filters")
-        show_record_table(filtered.head(20))
+        show_record_table(filtered.head(20), include_model=False)
         st.caption(f"Showing up to 20 of {len(filtered):,} matching records.")
 
 elif page == "Student records":
@@ -213,6 +219,9 @@ elif page == "Student records":
     if filtered.empty:
         st.info("No records match the current filters. Adjust the filters in the sidebar.")
     else:
+        analysis = model_analysis_or_stop(source_records)
+        records = prepare_display_frame(analysis["records"], int(school_days))
+        filtered = apply_filters(records, search_query, selected_course, selected_outcome)
         show_record_table(filtered)
         st.divider()
         record_ids = filtered["record_id"].astype(str).tolist()
@@ -256,6 +265,7 @@ elif page == "Student records":
         st.line_chart(trajectory)
 
 else:
+    analysis = model_analysis_or_stop(source_records)
     st.subheader("Model lab")
     st.write(
         "A Random Forest classifier predicts whether the final course grade reaches 10/20. "

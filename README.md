@@ -11,7 +11,7 @@ python -m pip install -r requirements.txt
 streamlit run app.py
 ```
 
-The app opens with two included UCI course files: Mathematics and Portuguese. It shows anonymized course-record IDs, grade progress (G1, G2, G3), course averages, pass/fail outcomes, absences, filters, charts, and an individual course-record detail view. Each row represents a student in one course; the source has no names or universal student identifier, so the IDs are generated for display and do not link a person across the two files.
+The app opens with two included UCI course files: Mathematics and Portuguese. Its overview renders without training the ML model; model fitting is deferred until the user opens Student records or Model lab. It shows anonymized course-record IDs, grade progress (G1, G2, G3), course averages, pass/fail outcomes, absences, filters, charts, and an individual course-record detail view. Each row represents a student in one course; the source has no names or universal student identifier, so the IDs are generated for display and do not link a person across the two files.
 
 ## Dataset, outcome, and attendance estimate
 
